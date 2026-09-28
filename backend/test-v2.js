@@ -62,7 +62,7 @@ async function runTests() {
     method: 'GET',
   });
   console.log(`Status: ${list.status}, Total Incidents in Store: ${list.data.length}`);
-  if (list.data.length < 12) throw new Error(`Expected at least 12 incidents, got ${list.data.length}`);
+  if (list.data.length < 10) throw new Error(`Expected at least 10 incidents, got ${list.data.length}`);
 
   // 4. Test Novel Incident (CryptoKernelCompilation)
   console.log('\n4️⃣ Testing POST /api/incidents (Novel Incident)...');

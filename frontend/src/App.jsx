@@ -22,7 +22,7 @@ import {
   HelpCircle
 } from 'lucide-react';
 
-// The 6 required incident types plus 1 novel zero-day
+// The 5 core attack incident types plus 1 novel zero-day
 const PRESETS = [
   {
     key: 'unusual_outbound_traffic',
@@ -69,19 +69,8 @@ const PRESETS = [
     },
   },
   {
-    key: 'phishing_credential_harvest',
-    label: '5. Phishing Credential Harvest (AiTM Bypass)',
-    badge: 'Repeat Type',
-    data: {
-      alertType: 'phishing_credential_harvest',
-      affectedSystem: 'okta-idp-gateway',
-      severity: 'high',
-      rawLogSnippet: '[OKTA] 2024-09-28T09:14:30Z Sign-in anomaly: User david.k@corp.com logged in from Amsterdam 2 minutes after San Francisco login; new session token issued',
-    },
-  },
-  {
     key: 'ddos_traffic_spike',
-    label: '6. DDoS Traffic Spike (SYN Reflection Flood)',
+    label: '5. DDoS Traffic Spike (SYN Reflection Flood)',
     badge: 'Repeat Type',
     data: {
       alertType: 'ddos_traffic_spike',
