@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: sentinelmind-backend
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - HINDSIGHT_API_KEY=${HINDSIGHT_API_KEY}
+      - HINDSIGHT_BASE_URL=${HINDSIGHT_BASE_URL:-https://api.hindsight.vectorize.io}
+      - HINDSIGHT_BANK_ID=${HINDSIGHT_BANK_ID:-sentinelmind-incidents}
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: sentinelmind-frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    restart: unless-stopped

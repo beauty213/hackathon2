@@ -1,0 +1,13 @@
+{
+  "name": "sentinelmind",
+  "version": "1.0.0",
+  "description": "SentinelMind AI Security Incident Response Agent with Hindsight Memory",
+  "scripts": {
+    "dev": "npm --prefix frontend run dev",
+    "build": "npm --prefix frontend run build",
+    "start": "npm --prefix backend start",
+    "backend": "npm --prefix backend start",
+    "frontend": "npm --prefix frontend run dev",
+    "test": "npm --prefix backend test"
+  }
+}
