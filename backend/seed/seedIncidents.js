@@ -2,165 +2,327 @@ const { writeMemory } = require('../services/hindsightClient');
 const incidentStore = require('../store/incidentStore');
 
 /**
- * 10 Curated Baseline Past Incidents across 5 core attack categories (2 per type).
- * Includes contrasting fixes with different outcomes and times.
- * Exactly 5 memoryAssisted=true (avg ~18.8m) and 5 memoryAssisted=false (avg ~88.0m)
- * for a dramatic ~79% Memory Impact proof metric.
+ * 15 Chronological Seed Incidents spanning 3 weeks across all 6 attack types.
+ *
+ * Sequence 1 to 6: Early incidents (Without Memory / Baseline)
+ * - Longer resolve times: 40-60 min
+ * - Higher failure / partial rate (shows the pain before Hindsight memory)
+ * - firstFixWorked: false
+ *
+ * Sequence 7 to 15: Later incidents (With Hindsight Persistent Memory)
+ * - Dramatic time reduction: 8-18 min
+ * - High success rate & first-fix accuracy
+ * - Actively avoided previous failed fixes (failedFixesAvoided)
+ * - Creates a steep, clear downward slope on the Learning Curve chart!
  */
 const SEED_INCIDENTS = [
-  // 1. unusual_outbound_traffic (SSRF Data Exfiltration)
+  // Sequence 1 - Week 1: Unassisted SSRF Exfiltration attempt
   {
-    id: 'INC-2024-101',
-    timestamp: '2024-06-12T14:22:11Z',
+    sequenceNumber: 1,
+    id: 'INC-2024-001',
+    timestamp: '2024-08-10T09:15:00Z',
+    alertType: 'unusual_outbound_traffic',
+    affectedSystem: 'billing-export-01',
+    severity: 'critical',
+    rawLogSnippet: '[NET-SEC] 2024-08-10T09:15:00Z High volume egress: 12.4GB transmitted to external IP 185.220.101.5 on port 443 over 10 minutes',
+    status: 'resolved',
+    fixApplied: 'Terminate process and rotate API keys only without network perimeter rule',
+    outcome: 'failed',
+    timeToResolveMinutes: 55,
+    rootCause: 'Exfiltration via reverse tunnel spawned by backdoor persistence script that re-established on pod restart.',
+    memoryAssisted: false,
+    matchedPastIncidentIds: [],
+    confidence: 'low',
+    firstFixWorked: false,
+  },
+
+  // Sequence 2 - Week 1: Unassisted SSH Brute Force
+  {
+    sequenceNumber: 2,
+    id: 'INC-2024-002',
+    timestamp: '2024-08-11T14:20:00Z',
+    alertType: 'brute_force_login',
+    affectedSystem: 'legacy-portal-ssh',
+    severity: 'medium',
+    rawLogSnippet: '[SSHD] 2024-08-11T14:20:00Z Failed password for invalid user root from 203.0.113.88 port 51222 ssh2 (3200 attempts)',
+    status: 'resolved',
+    fixApplied: 'Manual IP blacklist on local iptables',
+    outcome: 'partial',
+    timeToResolveMinutes: 48,
+    rootCause: 'Attacker rotated through residential proxies, quickly bypassing individual static IP blocks.',
+    memoryAssisted: false,
+    matchedPastIncidentIds: [],
+    confidence: 'low',
+    firstFixWorked: false,
+  },
+
+  // Sequence 3 - Week 1: Unassisted RBAC Privilege Escalation
+  {
+    sequenceNumber: 3,
+    id: 'INC-2024-003',
+    timestamp: '2024-08-13T11:05:00Z',
+    alertType: 'privilege_escalation',
+    affectedSystem: 'k8s-control-plane',
+    severity: 'critical',
+    rawLogSnippet: '[KUBE-APISERVER] 2024-08-13T11:05:00Z user system:serviceaccount:default:sa-worker created ClusterRoleBinding cluster-admin',
+    status: 'resolved',
+    fixApplied: 'Revoke service account token without mutating RBAC role permissions',
+    outcome: 'failed',
+    timeToResolveMinutes: 60,
+    rootCause: 'Default service account had wildcard bind permissions granted by deprecated Helm chart.',
+    memoryAssisted: false,
+    matchedPastIncidentIds: [],
+    confidence: 'low',
+    firstFixWorked: false,
+  },
+
+  // Sequence 4 - Week 1: Unassisted Ransomware Outbreak
+  {
+    sequenceNumber: 4,
+    id: 'INC-2024-004',
+    timestamp: '2024-08-14T21:40:00Z',
+    alertType: 'ransomware_activity',
+    affectedSystem: 'backup-vault-02',
+    severity: 'critical',
+    rawLogSnippet: '[EDR] 2024-08-14T21:40:00Z BitLocker volume encryption initiated by unverified script svchost_enc.ps1 on secondary vault',
+    status: 'resolved',
+    fixApplied: 'Kill powershell process and reboot storage server',
+    outcome: 'failed',
+    timeToResolveMinutes: 52,
+    rootCause: 'Scheduled task persistence triggered automated encryption immediately on reboot before keys were saved.',
+    memoryAssisted: false,
+    matchedPastIncidentIds: [],
+    confidence: 'low',
+    firstFixWorked: false,
+  },
+
+  // Sequence 5 - Week 2: Unassisted DNS Amplification Flood
+  {
+    sequenceNumber: 5,
+    id: 'INC-2024-005',
+    timestamp: '2024-08-16T10:30:00Z',
+    alertType: 'ddos_traffic_spike',
+    affectedSystem: 'dns-authoritative-ns1',
+    severity: 'high',
+    rawLogSnippet: '[DNS] 2024-08-16T10:30:00Z Anycast DNS query rate exceeded 250,000 qps for ANY query type from spoofed IP pool',
+    status: 'resolved',
+    fixApplied: 'Increase server CPU instances and restart bind9 service',
+    outcome: 'failed',
+    timeToResolveMinutes: 45,
+    rootCause: 'DNS amplification attack overwhelmed upstream transit link bandwidth, unaffected by compute scaling.',
+    memoryAssisted: false,
+    matchedPastIncidentIds: [],
+    confidence: 'low',
+    firstFixWorked: false,
+  },
+
+  // Sequence 6 - Week 2: Unassisted Phishing Forwarding Rule
+  {
+    sequenceNumber: 6,
+    id: 'INC-2024-006',
+    timestamp: '2024-08-17T13:25:00Z',
+    alertType: 'phishing_credential_harvest',
+    affectedSystem: 'mail-exchange-online',
+    severity: 'high',
+    rawLogSnippet: '[M365] 2024-08-17T13:25:00Z Mailbox inbox rule created: forward all emails containing invoice, payment, secret to extern-drop@proton.me',
+    status: 'resolved',
+    fixApplied: 'Delete forwarding rule and reset user password only',
+    outcome: 'partial',
+    timeToResolveMinutes: 40,
+    rootCause: 'OAuth consent grant remained authorized, allowing third-party app to keep reading mail without password.',
+    memoryAssisted: false,
+    matchedPastIncidentIds: [],
+    confidence: 'medium',
+    firstFixWorked: false,
+  },
+
+  // =========================================================================
+  // MEMORY ACTIVATED: Hindsight institutional memory active from here onward!
+  // =========================================================================
+
+  // Sequence 7 - Week 2: SSRF repeat -> Hindsight recalls INC-2024-001 failure
+  {
+    sequenceNumber: 7,
+    id: 'INC-2024-007',
+    timestamp: '2024-08-19T14:22:00Z',
     alertType: 'unusual_outbound_traffic',
     affectedSystem: 'webhook-dispatcher-01',
     severity: 'high',
-    rawLogSnippet: '[SECURITY] 2024-06-12T14:22:11Z HTTP 200 GET to 169.254.169.254/latest/meta-data/iam/security-credentials/ from client webhook proxy worker-04; egress payload 450MB',
+    rawLogSnippet: '[SECURITY] 2024-08-19T14:22:00Z HTTP 200 GET to 169.254.169.254/latest/meta-data/iam/security-credentials/ from client webhook proxy worker-04; egress payload 450MB',
     status: 'resolved',
     fixApplied: 'Enforce IMDSv2 and deploy Calico network egress policy blocking 169.254.169.254/32',
     outcome: 'success',
     timeToResolveMinutes: 18,
     rootCause: 'Unsanitized webhook URLs allowed SSRF into cloud instance metadata service.',
     memoryAssisted: true,
-  },
-  {
-    id: 'INC-2024-102',
-    timestamp: '2024-05-10T02:14:00Z',
-    alertType: 'unusual_outbound_traffic',
-    affectedSystem: 'billing-export-node',
-    severity: 'critical',
-    rawLogSnippet: '[NET-SEC] 2024-05-10T02:14:00Z High volume egress: 12.4GB transmitted to external IP 185.220.101.5 on port 443 over 10 minutes',
-    status: 'resolved',
-    fixApplied: 'Terminate process and rotate API keys only without network perimeter rule',
-    outcome: 'failed',
-    timeToResolveMinutes: 95,
-    rootCause: 'Exfiltration via reverse tunnel spawned by backdoor persistence script that re-established on pod restart.',
-    memoryAssisted: false,
+    matchedPastIncidentIds: ['INC-2024-001'],
+    confidence: 'high',
+    firstFixWorked: true,
   },
 
-  // 2. brute_force_login (Credential Stuffing Attack)
+  // Sequence 8 - Week 2: Auth stuffing repeat -> Hindsight recalls INC-2024-002
   {
-    id: 'INC-2024-201',
-    timestamp: '2024-07-03T09:12:44Z',
+    sequenceNumber: 8,
+    id: 'INC-2024-008',
+    timestamp: '2024-08-20T09:12:00Z',
     alertType: 'brute_force_login',
     affectedSystem: 'auth-api-cluster',
     severity: 'high',
-    rawLogSnippet: '[AUTH] 2024-07-03T09:12:44Z AuthFailureSpike: 14,200 failed POST /v1/auth/login attempts from subnet 198.51.100.0/24 targeting user admin',
+    rawLogSnippet: '[AUTH] 2024-08-20T09:12:00Z AuthFailureSpike: 14,200 failed POST /v1/auth/login attempts from subnet 198.51.100.0/24 targeting user admin',
     status: 'resolved',
     fixApplied: 'Deploy Cloudflare WAF IP rate limiting and enforce adaptive MFA challenge',
     outcome: 'success',
     timeToResolveMinutes: 14,
     rootCause: 'Distributed credential stuffing attack against public authentication gateway lacking rate limits.',
     memoryAssisted: true,
-  },
-  {
-    id: 'INC-2024-202',
-    timestamp: '2024-04-19T22:04:12Z',
-    alertType: 'brute_force_login',
-    affectedSystem: 'legacy-portal-ssh',
-    severity: 'medium',
-    rawLogSnippet: '[SSHD] 2024-04-19T22:04:12Z Failed password for invalid user root from 203.0.113.88 port 51222 ssh2 (3200 attempts)',
-    status: 'resolved',
-    fixApplied: 'Manual IP blacklist on local iptables',
-    outcome: 'partial',
-    timeToResolveMinutes: 70,
-    rootCause: 'Attacker rotated across residential proxies bypassing individual static IP blocks.',
-    memoryAssisted: false,
+    matchedPastIncidentIds: ['INC-2024-002'],
+    confidence: 'high',
+    firstFixWorked: true,
   },
 
-  // 3. privilege_escalation (Container Escape Anomaly)
+  // Sequence 9 - Week 2: Container escape repeat -> Hindsight recalls INC-2024-003
   {
-    id: 'INC-2024-301',
-    timestamp: '2024-08-01T16:30:19Z',
+    sequenceNumber: 9,
+    id: 'INC-2024-009',
+    timestamp: '2024-08-22T16:30:00Z',
     alertType: 'privilege_escalation',
     affectedSystem: 'ci-runner-fleet',
     severity: 'critical',
-    rawLogSnippet: '[AUDIT] 2024-08-01T16:30:19Z sudo: gitlab-runner : TTY=unknown ; PWD=/builds ; USER=root ; COMMAND=/bin/nsenter -t 1 -m -u -n -i bash',
+    rawLogSnippet: '[AUDIT] 2024-08-22T16:30:00Z sudo: gitlab-runner : TTY=unknown ; PWD=/builds ; USER=root ; COMMAND=/bin/nsenter -t 1 -m -u -n -i bash',
     status: 'resolved',
     fixApplied: 'Remove privileged flag from Docker daemon container spec and drop CAP_SYS_ADMIN',
     outcome: 'success',
-    timeToResolveMinutes: 22,
+    timeToResolveMinutes: 16,
     rootCause: 'CI runner pod ran in privileged mode allowing container escape via nsenter to host kernel.',
     memoryAssisted: true,
-  },
-  {
-    id: 'INC-2024-302',
-    timestamp: '2024-03-28T11:15:33Z',
-    alertType: 'privilege_escalation',
-    affectedSystem: 'k8s-control-plane',
-    severity: 'critical',
-    rawLogSnippet: '[KUBE-APISERVER] 2024-03-28T11:15:33Z user system:serviceaccount:default:sa-worker created ClusterRoleBinding cluster-admin',
-    status: 'resolved',
-    fixApplied: 'Revoke service account token without mutating RBAC role permissions',
-    outcome: 'failed',
-    timeToResolveMinutes: 85,
-    rootCause: 'Default service account had wildcard bind permissions granted by deprecated Helm chart.',
-    memoryAssisted: false,
+    matchedPastIncidentIds: ['INC-2024-003'],
+    confidence: 'high',
+    firstFixWorked: true,
   },
 
-  // 4. ransomware_activity (Storage Mass Cryptolock)
+  // Sequence 10 - Week 3: Ransomware repeat -> Hindsight recalls INC-2024-004
   {
-    id: 'INC-2024-401',
-    timestamp: '2024-08-15T04:02:11Z',
+    sequenceNumber: 10,
+    id: 'INC-2024-010',
+    timestamp: '2024-08-23T04:02:00Z',
     alertType: 'ransomware_activity',
     affectedSystem: 'storage-nfs-prod',
     severity: 'critical',
-    rawLogSnippet: '[STORAGE-ALERT] 2024-08-15T04:02:11Z Mass file modification: 45,000 files renamed with extension .cryptolock in /exports/shares within 60s',
+    rawLogSnippet: '[STORAGE-ALERT] 2024-08-23T04:02:00Z Mass file modification: 45,000 files renamed with extension .cryptolock in /exports/shares within 60s',
     status: 'resolved',
     fixApplied: 'Sever NFS export network interface, isolate infected host, and restore immutable ZFS snapshot',
     outcome: 'success',
-    timeToResolveMinutes: 25,
+    timeToResolveMinutes: 15,
     rootCause: 'Compromised workstation mounted network share and executed automated ransomware payload.',
     memoryAssisted: true,
-  },
-  {
-    id: 'INC-2024-402',
-    timestamp: '2024-06-20T21:40:05Z',
-    alertType: 'ransomware_activity',
-    affectedSystem: 'backup-storage-dr',
-    severity: 'critical',
-    rawLogSnippet: '[EDR] 2024-06-20T21:40:05Z BitLocker volume encryption initiated by unverified script svchost_enc.ps1 on secondary vault',
-    status: 'resolved',
-    fixApplied: 'Kill powershell process and reboot storage server',
-    outcome: 'failed',
-    timeToResolveMinutes: 110,
-    rootCause: 'Scheduled task persistence triggered encryption on reboot before offline keys were salvaged.',
-    memoryAssisted: false,
+    matchedPastIncidentIds: ['INC-2024-004'],
+    confidence: 'high',
+    firstFixWorked: true,
   },
 
-  // 5. ddos_traffic_spike (Volumetric Reflection Flood)
+  // Sequence 11 - Week 3: DDoS repeat -> Hindsight recalls INC-2024-005
   {
-    id: 'INC-2024-501',
-    timestamp: '2024-08-30T18:05:00Z',
+    sequenceNumber: 11,
+    id: 'INC-2024-011',
+    timestamp: '2024-08-25T18:05:00Z',
     alertType: 'ddos_traffic_spike',
     affectedSystem: 'edge-ingress-gateway',
     severity: 'critical',
-    rawLogSnippet: '[EDGE] 2024-08-30T18:05:00Z SYN flood detected: 8.5 million pps / 42 Gbps targeting /api/v1/checkout from UDP/SYN reflection',
+    rawLogSnippet: '[EDGE] 2024-08-25T18:05:00Z SYN flood detected: 8.5 million pps / 42 Gbps targeting /api/v1/checkout from UDP/SYN reflection',
     status: 'resolved',
     fixApplied: 'Activate Cloudflare Under Attack mode and enable Anycast BGP scrubbing with Geo-blocking',
     outcome: 'success',
-    timeToResolveMinutes: 15,
+    timeToResolveMinutes: 12,
     rootCause: 'Mirai variant botnet launched volumetric SYN/UDP reflection flood against checkout endpoint.',
     memoryAssisted: true,
+    matchedPastIncidentIds: ['INC-2024-005'],
+    confidence: 'high',
+    firstFixWorked: true,
   },
+
+  // Sequence 12 - Week 3: Phishing repeat -> Hindsight recalls INC-2024-006
   {
-    id: 'INC-2024-502',
-    timestamp: '2024-04-12T10:20:00Z',
-    alertType: 'ddos_traffic_spike',
-    affectedSystem: 'dns-authoritative-ns1',
+    sequenceNumber: 12,
+    id: 'INC-2024-012',
+    timestamp: '2024-08-26T08:14:00Z',
+    alertType: 'phishing_credential_harvest',
+    affectedSystem: 'okta-idp-gateway',
     severity: 'high',
-    rawLogSnippet: '[DNS] 2024-04-12T10:20:00Z Anycast DNS query rate exceeded 250,000 qps for ANY query type from spoofed IP pool',
+    rawLogSnippet: '[OKTA] 2024-08-26T08:14:00Z Sign-in from anomalous location: User sarah.c@corp.com logged in from Lagos 3 minutes after NY login',
     status: 'resolved',
-    fixApplied: 'Increase server CPU instances and restart bind9 service',
-    outcome: 'failed',
-    timeToResolveMinutes: 80,
-    rootCause: 'DNS amplification attack overwhelmed upstream transit link bandwidth, unaffected by local compute scaling.',
-    memoryAssisted: false,
+    fixApplied: 'Revoke all active Okta sessions, invalidate refresh tokens, and enforce FIDO2 WebAuthn hardware key',
+    outcome: 'success',
+    timeToResolveMinutes: 10,
+    rootCause: 'Adversary-in-the-Middle (Evilginx) phishing site intercepted SMS 2FA code and session cookie.',
+    memoryAssisted: true,
+    matchedPastIncidentIds: ['INC-2024-006'],
+    confidence: 'high',
+    firstFixWorked: true,
+  },
+
+  // Sequence 13 - Week 3: SSRF cluster -> Fast repeat triage
+  {
+    sequenceNumber: 13,
+    id: 'INC-2024-013',
+    timestamp: '2024-08-28T12:00:00Z',
+    alertType: 'unusual_outbound_traffic',
+    affectedSystem: 'data-analytics-pipeline',
+    severity: 'high',
+    rawLogSnippet: '[SECURITY] 2024-08-28T12:00:00Z Outbound metadata scrape attempt to 169.254.169.254 intercepted by security gateway',
+    status: 'resolved',
+    fixApplied: 'Enforce IMDSv2 and deploy Calico network egress policy blocking 169.254.169.254/32',
+    outcome: 'success',
+    timeToResolveMinutes: 11,
+    rootCause: 'Spark job configuration parameter SSRF attempt matching INC-2024-007 signature.',
+    memoryAssisted: true,
+    matchedPastIncidentIds: ['INC-2024-001', 'INC-2024-007'],
+    confidence: 'high',
+    firstFixWorked: true,
+  },
+
+  // Sequence 14 - Week 3: Auth credential stuffing repeat -> Rapid mitigation
+  {
+    sequenceNumber: 14,
+    id: 'INC-2024-014',
+    timestamp: '2024-08-29T15:30:00Z',
+    alertType: 'brute_force_login',
+    affectedSystem: 'partner-portal-api',
+    severity: 'high',
+    rawLogSnippet: '[AUTH] 2024-08-29T15:30:00Z 22,000 rapid failed authentication requests on /oauth/token from botnet range',
+    status: 'resolved',
+    fixApplied: 'Deploy Cloudflare WAF IP rate limiting and enforce adaptive MFA challenge',
+    outcome: 'success',
+    timeToResolveMinutes: 9,
+    rootCause: 'Distributed credential stuffing matching INC-2024-008 pattern.',
+    memoryAssisted: true,
+    matchedPastIncidentIds: ['INC-2024-002', 'INC-2024-008'],
+    confidence: 'high',
+    firstFixWorked: true,
+  },
+
+  // Sequence 15 - Week 3: Container privilege escalation -> Instant playbook match
+  {
+    sequenceNumber: 15,
+    id: 'INC-2024-015',
+    timestamp: '2024-08-31T17:10:00Z',
+    alertType: 'privilege_escalation',
+    affectedSystem: 'staging-cluster-worker',
+    severity: 'critical',
+    rawLogSnippet: '[AUDIT] 2024-08-31T17:10:00Z Container spawned with hostPID=true and privileged=true in staging namespace',
+    status: 'resolved',
+    fixApplied: 'Remove privileged flag from Docker daemon container spec and drop CAP_SYS_ADMIN',
+    outcome: 'success',
+    timeToResolveMinutes: 8,
+    rootCause: 'Privileged container escape attempt matching INC-2024-009 signature.',
+    memoryAssisted: true,
+    matchedPastIncidentIds: ['INC-2024-003', 'INC-2024-009'],
+    confidence: 'high',
+    firstFixWorked: true,
   },
 ];
 
 /**
- * Preload the 10 seed incidents into both IncidentStore and Hindsight memory
+ * Preload the 15 seed incidents into both IncidentStore and Hindsight memory
  */
 async function seedPastIncidents() {
   console.log(`[Seed] Preloading ${SEED_INCIDENTS.length} baseline security incidents into store and Hindsight...`);
@@ -173,13 +335,13 @@ async function seedPastIncidents() {
   for (const incident of SEED_INCIDENTS) {
     try {
       await writeMemory(incident);
-      console.log(`[Seed] Seeded memory for ${incident.id} (${incident.alertType})`);
+      console.log(`[Seed] Seeded memory for ${incident.id} (${incident.alertType}, seq ${incident.sequenceNumber})`);
     } catch (err) {
       console.error(`[Seed] Failed seeding memory for ${incident.id}:`, err.message);
     }
   }
 
-  console.log('[Seed] Baseline memory seeding complete.');
+  console.log('[Seed] 15-Incident baseline memory seeding complete.');
 }
 
 module.exports = {

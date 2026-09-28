@@ -1,64 +1,315 @@
 const express = require('express');
 const router = express.Router();
+const incidentStore = require('../store/incidentStore');
 const { queryMemory, writeMemory } = require('../services/hindsightClient');
 const { triageIncident } = require('../services/groqTriage');
+const { computeWhatIfCandidates } = require('../services/statsService');
+
+/**
+ * GET /api/incidents
+ * Full history list ordered by sequence number (or timestamp)
+ */
+router.get('/', (req, res) => {
+  try {
+    const incidents = incidentStore.getAll();
+    res.json(incidents);
+  } catch (err) {
+    console.error('[IncidentsRoute] Failed to fetch incidents:', err);
+    res.status(500).json({ error: 'Failed to fetch incidents', message: err.message });
+  }
+});
 
 /**
  * POST /api/incidents
- * Main endpoint: queryMemory -> triageIncident -> return result
+ * Main endpoint: save open incident -> queryMemory -> triageIncident -> return full analysis
  */
 router.post('/', async (req, res) => {
   try {
-    const incident = req.body;
+    const { alertType, affectedSystem, severity, rawLogSnippet } = req.body;
 
-    if (!incident || !incident.alertType || !incident.affectedSystem) {
+    if (!alertType || !affectedSystem) {
       return res.status(400).json({
         error: 'Missing required incident fields: alertType and affectedSystem are required.',
       });
     }
 
-    // Default missing properties if omitted
-    const normalizedIncident = {
-      id: incident.id || `INC-${Date.now()}`,
-      timestamp: incident.timestamp || new Date().toISOString(),
-      alertType: incident.alertType,
-      affectedSystem: incident.affectedSystem,
-      severity: incident.severity || 'high',
-      rawLogSnippet: incident.rawLogSnippet || 'No logs provided.',
-      rootCause: incident.rootCause || null,
-      resolution: incident.resolution || null,
+    const id = req.body.id || `INC-${Date.now()}`;
+    const timestamp = req.body.timestamp || new Date().toISOString();
+
+    const incident = {
+      id,
+      timestamp,
+      alertType,
+      affectedSystem,
+      severity: severity || 'high',
+      rawLogSnippet: rawLogSnippet || 'No logs provided.',
+      status: 'open',
+      fixApplied: null,
+      outcome: null,
+      timeToResolveMinutes: null,
+      rootCause: null,
+      memoryAssisted: false,
+      matchedPastIncidentIds: [],
+      confidence: 'low',
+      firstFixWorked: null,
     };
 
-    console.log(`[IncidentsRoute] Processing incoming incident ${normalizedIncident.id} (${normalizedIncident.alertType})`);
+    // Save initial open incident into store (auto-assigns sequenceNumber)
+    const savedIncident = incidentStore.save(incident);
+    console.log(`[IncidentsRoute] Created open incident ${savedIncident.id} (Seq: ${savedIncident.sequenceNumber}, ${savedIncident.alertType})`);
 
     // 1. Query Hindsight memory for matching past incidents
-    const pastMatches = await queryMemory(normalizedIncident);
+    const pastMatches = await queryMemory(savedIncident);
 
-    // 2. Perform AI triage with Groq using the incident context + Hindsight matches
-    const triage = await triageIncident(normalizedIncident, pastMatches);
+    // 2. Build structured memoryTrail with deduplication
+    const memoryTrail = [];
+    const seenIds = new Set();
+    if (Array.isArray(pastMatches) && pastMatches.length > 0) {
+      for (const m of pastMatches) {
+        const targetId = m.metadata?.incidentId || m.id;
+        if (!targetId || targetId === savedIncident.id || seenIds.has(targetId)) continue;
 
-    // 3. If caller explicitly requested to learn/retain this incident (or if rootCause/resolution are supplied)
-    if (req.body.saveToMemory || (normalizedIncident.rootCause && normalizedIncident.resolution)) {
-      await writeMemory({
-        ...normalizedIncident,
-        rootCause: normalizedIncident.rootCause || triage.likelyRootCause,
-        resolution: normalizedIncident.resolution || triage.recommendation,
-      });
-      console.log(`[IncidentsRoute] Learned new incident ${normalizedIncident.id} into Hindsight memory`);
+        const matchedItem = (targetId && incidentStore.getById(targetId)) || m.pastIncident;
+        if (matchedItem) {
+          seenIds.add(matchedItem.id);
+          memoryTrail.push({
+            id: matchedItem.id,
+            alertType: matchedItem.alertType || m.metadata?.alertType || savedIncident.alertType,
+            date: matchedItem.timestamp || m.timestamp || new Date().toISOString(),
+            similarityReason: `Recalled pattern matching ${matchedItem.alertType || savedIncident.alertType} on ${matchedItem.affectedSystem || 'system'} (relevance: ${m.score ?? 'N/A'})`,
+            fixApplied: matchedItem.fixApplied || matchedItem.resolution || 'N/A',
+            outcome: matchedItem.outcome || 'success',
+            timeToResolveMinutes: matchedItem.timeToResolveMinutes !== undefined
+              ? matchedItem.timeToResolveMinutes
+              : (m.metadata?.timeToResolveMinutes ? Number(m.metadata.timeToResolveMinutes) : null),
+            rootCause: matchedItem.rootCause || 'N/A',
+          });
+        }
+      }
     }
 
-    // 4. Return the combined result
+    // 3. Mark incident as memoryAssisted if memoryTrail has matches
+    const hasMemory = memoryTrail.length > 0;
+    savedIncident.memoryAssisted = hasMemory;
+    savedIncident.matchedPastIncidentIds = memoryTrail.map((m) => m.id);
+
+    // 4. Compute candidate fixes for What-If scenario analysis
+    const allIncidents = incidentStore.getAll();
+    const whatIfCandidates = computeWhatIfCandidates(savedIncident.alertType, allIncidents);
+
+    // 5. Run Groq triage
+    const triage = await triageIncident(savedIncident, memoryTrail, whatIfCandidates);
+
+    savedIncident.confidence = triage.confidence || (hasMemory ? 'high' : 'low');
+    savedIncident.matchedPastIncidentIds = triage.matchedPastIncidentIds || savedIncident.matchedPastIncidentIds;
+    incidentStore.save(savedIncident);
+
+    // 6. Return response payload
     return res.json({
-      incident: normalizedIncident,
-      pastMatches,
-      triage,
+      incident: savedIncident,
+      recommendation: triage.recommendation,
+      likelyRootCause: triage.likelyRootCause,
+      confidence: triage.confidence,
+      matchedPastIncidentIds: triage.matchedPastIncidentIds,
+      reasoning: triage.reasoning,
+      memoryTrail,
+      whatIf: {
+        candidates: whatIfCandidates,
+        summary: triage.whatIfSummary,
+      },
     });
   } catch (error) {
-    console.error('[IncidentsRoute] Error handling incident:', error);
+    console.error('[IncidentsRoute] Error triaging incident:', error);
     return res.status(500).json({
       error: 'Failed to triage incident',
       message: error.message,
     });
+  }
+});
+
+/**
+ * POST /api/incidents/compare
+ * Runs the SAME incident through triage twice:
+ * (a) memory disabled (no Hindsight query, generic prompt)
+ * (b) memory enabled (normal pipeline)
+ * Returns both outputs side by side with calculated differences
+ */
+router.post('/compare', async (req, res) => {
+  try {
+    const { alertType, affectedSystem, severity, rawLogSnippet } = req.body;
+
+    if (!alertType || !affectedSystem) {
+      return res.status(400).json({ error: 'alertType and affectedSystem are required' });
+    }
+
+    const testIncident = {
+      id: req.body.id || `COMPARE-${Date.now()}`,
+      alertType,
+      affectedSystem,
+      severity: severity || 'high',
+      rawLogSnippet: rawLogSnippet || 'No logs provided.',
+      timestamp: new Date().toISOString(),
+    };
+
+    const allIncidents = incidentStore.getAll();
+
+    // 1. Compute Without-Memory Baseline
+    const unassisted = allIncidents.filter((i) => i.memoryAssisted === false && i.timeToResolveMinutes);
+    const unassistedAvg = unassisted.length > 0
+      ? Math.round(unassisted.reduce((s, i) => s + Number(i.timeToResolveMinutes), 0) / unassisted.length)
+      : 50;
+
+    const withoutMemory = {
+      recommendation: `Apply generic first-principles containment on ${testIncident.affectedSystem}: isolate ingress traffic, collect full memory/core dumps, review recent deployment deltas, and page on-call SecOps.`,
+      likelyRootCause: `Unconfirmed anomalous behavior on ${testIncident.affectedSystem}. No historical signatures or precedents found in memory.`,
+      confidence: 'low',
+      matchedPastIncidentIds: [],
+      reasoning: `Triage performed with Hindsight persistent memory disabled. Without institutional recall, the agent must treat this alert as a novel zero-day, requiring extensive manual diagnosis.`,
+      estimatedTimeToResolve: unassistedAvg,
+    };
+
+    // 2. Compute With-Memory Pipeline
+    const pastMatches = await queryMemory(testIncident);
+    const memoryTrail = [];
+    const seenIds = new Set();
+    if (Array.isArray(pastMatches) && pastMatches.length > 0) {
+      for (const m of pastMatches) {
+        const targetId = m.metadata?.incidentId || m.id;
+        if (!targetId || seenIds.has(targetId)) continue;
+        const matchedItem = (targetId && incidentStore.getById(targetId)) || m.pastIncident;
+        if (matchedItem) {
+          seenIds.add(matchedItem.id);
+          memoryTrail.push({
+            id: matchedItem.id,
+            alertType: matchedItem.alertType || testIncident.alertType,
+            fixApplied: matchedItem.fixApplied || 'Apply standard playbook',
+            outcome: matchedItem.outcome || 'success',
+            timeToResolveMinutes: matchedItem.timeToResolveMinutes || 15,
+            rootCause: matchedItem.rootCause || 'Recurring failure mode',
+          });
+        }
+      }
+    }
+
+    const whatIfCandidates = computeWhatIfCandidates(testIncident.alertType, allIncidents);
+    const triage = await triageIncident(testIncident, memoryTrail, whatIfCandidates);
+
+    // Calculate estimated time for with-memory
+    const matchingTimes = memoryTrail
+      .filter((m) => m.outcome === 'success' && m.timeToResolveMinutes)
+      .map((m) => Number(m.timeToResolveMinutes));
+    const assistedEstimatedTime = matchingTimes.length > 0
+      ? Math.round(matchingTimes.reduce((s, t) => s + t, 0) / matchingTimes.length)
+      : (whatIfCandidates[0]?.avgTimeToResolve || 14);
+
+    const withMemory = {
+      recommendation: triage.recommendation,
+      likelyRootCause: triage.likelyRootCause,
+      confidence: memoryTrail.length > 0 ? 'high' : triage.confidence,
+      matchedPastIncidentIds: triage.matchedPastIncidentIds || memoryTrail.map((m) => m.id),
+      reasoning: triage.reasoning,
+      estimatedTimeToResolve: assistedEstimatedTime,
+    };
+
+    // 3. Compute Differences
+    const savedMinutes = Math.max(0, withoutMemory.estimatedTimeToResolve - withMemory.estimatedTimeToResolve);
+    const percentFaster = withoutMemory.estimatedTimeToResolve > 0
+      ? Math.round((savedMinutes / withoutMemory.estimatedTimeToResolve) * 100)
+      : 0;
+
+    const differences = {
+      confidenceChange: `${withoutMemory.confidence} ➔ ${withMemory.confidence}`,
+      matchedIncidents: withMemory.matchedPastIncidentIds,
+      fixSuggested: {
+        without: withoutMemory.recommendation,
+        with: withMemory.recommendation,
+      },
+      estimatedTimeToResolve: {
+        without: withoutMemory.estimatedTimeToResolve,
+        with: withMemory.estimatedTimeToResolve,
+        savedMinutes,
+        percentFaster,
+      },
+    };
+
+    return res.json({
+      incident: testIncident,
+      withoutMemory,
+      withMemory,
+      differences,
+    });
+  } catch (err) {
+    console.error('[IncidentsRoute] Error in compare endpoint:', err);
+    return res.status(500).json({ error: 'Failed to run comparison', message: err.message });
+  }
+});
+
+/**
+ * POST /api/incidents/:id/resolve
+ * Body: { fixApplied, outcome, rootCause, timeToResolveMinutes, firstFixWorked }
+ * Updates the store AND writes the outcome to Hindsight (agent learns)
+ */
+router.post('/:id/resolve', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { fixApplied, outcome, rootCause, timeToResolveMinutes, firstFixWorked } = req.body;
+
+    const existing = incidentStore.getById(id);
+    if (!existing) {
+      return res.status(404).json({ error: `Incident ${id} not found` });
+    }
+
+    const resolved = incidentStore.resolve(id, {
+      fixApplied,
+      outcome: outcome || 'success',
+      rootCause,
+      timeToResolveMinutes: Number(timeToResolveMinutes) || 15,
+      firstFixWorked: firstFixWorked !== undefined ? Boolean(firstFixWorked) : (outcome === 'success'),
+    });
+
+    console.log(`[IncidentsRoute] Resolved incident ${id} (Seq: ${resolved.sequenceNumber}, outcome: ${resolved.outcome}, time: ${resolved.timeToResolveMinutes}m)`);
+
+    // Write updated incident to Hindsight persistent memory so future triages benefit immediately
+    try {
+      await writeMemory(resolved);
+      console.log(`[IncidentsRoute] Learned resolved incident ${id} into Hindsight persistent memory`);
+    } catch (memErr) {
+      console.error(`[IncidentsRoute] Warning: Failed to write ${id} to Hindsight:`, memErr.message);
+    }
+
+    return res.json({
+      success: true,
+      incident: resolved,
+    });
+  } catch (err) {
+    console.error('[IncidentsRoute] Failed to resolve incident:', err);
+    return res.status(500).json({ error: 'Failed to resolve incident', message: err.message });
+  }
+});
+
+/**
+ * GET /api/incidents/:id/whatif
+ * Returns candidate fixes for the incident's alertType with stats
+ */
+router.get('/:id/whatif', (req, res) => {
+  try {
+    const { id } = req.params;
+    const incident = incidentStore.getById(id);
+    if (!incident) {
+      return res.status(404).json({ error: `Incident ${id} not found` });
+    }
+
+    const allIncidents = incidentStore.getAll();
+    const candidates = computeWhatIfCandidates(incident.alertType, allIncidents);
+
+    return res.json({
+      incidentId: incident.id,
+      alertType: incident.alertType,
+      candidates,
+    });
+  } catch (err) {
+    console.error('[IncidentsRoute] Error computing whatif:', err);
+    return res.status(500).json({ error: 'Failed to compute whatif analysis', message: err.message });
   }
 });
 

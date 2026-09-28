@@ -2,14 +2,17 @@ const fs = require('fs');
 const path = require('path');
 
 const DATA_DIR = process.env.DATA_DIR || 
-  (fs.existsSync(path.resolve(__dirname, '../../data')) 
-    ? path.resolve(__dirname, '../../data') 
-    : path.resolve(__dirname, '../data'));
+  (process.env.VERCEL ? '/tmp/data' :
+    (fs.existsSync(path.resolve(__dirname, '../../data')) 
+      ? path.resolve(__dirname, '../../data') 
+      : path.resolve(__dirname, '../data')));
 const DATA_FILE = path.join(DATA_DIR, 'incidents.json');
 
 // Ensure data directory exists
 if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  } catch (_) {}
 }
 
 // In-memory cache
@@ -33,9 +36,12 @@ function loadFromDisk() {
 
 function saveToDisk() {
   try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
     fs.writeFileSync(DATA_FILE, JSON.stringify(incidentsCache, null, 2), 'utf-8');
   } catch (err) {
-    console.error(`[IncidentStore] Error saving incidents to disk:`, err.message);
+    console.error(`[IncidentStore] Warning: Could not save to disk (${err.message}). In-memory store remains active.`);
   }
 }
 
@@ -43,7 +49,7 @@ function saveToDisk() {
 loadFromDisk();
 
 module.exports = {
-  getAll: () => [...incidentsCache],
+  getAll: () => [...incidentsCache].sort((a, b) => (a.sequenceNumber || 0) - (b.sequenceNumber || 0)),
 
   getById: (id) => incidentsCache.find((inc) => inc.id === id) || null,
 
@@ -51,31 +57,52 @@ module.exports = {
     const idx = incidentsCache.findIndex((inc) => inc.id === incident.id);
     if (idx >= 0) {
       incidentsCache[idx] = { ...incidentsCache[idx], ...incident };
+      saveToDisk();
+      return incidentsCache[idx];
     } else {
-      incidentsCache.push(incident);
+      const maxSeq = incidentsCache.length > 0 
+        ? Math.max(...incidentsCache.map((i) => Number(i.sequenceNumber) || 0)) 
+        : 0;
+      const nextSeq = incident.sequenceNumber !== undefined ? Number(incident.sequenceNumber) : maxSeq + 1;
+      const newInc = { 
+        ...incident, 
+        sequenceNumber: nextSeq,
+        matchedPastIncidentIds: incident.matchedPastIncidentIds || [],
+        confidence: incident.confidence || (incident.memoryAssisted ? 'high' : 'low'),
+        firstFixWorked: incident.firstFixWorked !== undefined ? incident.firstFixWorked : null,
+      };
+      incidentsCache.push(newInc);
+      saveToDisk();
+      return newInc;
     }
-    saveToDisk();
-    return idx >= 0 ? incidentsCache[idx] : incident;
   },
 
   saveAll: (incidents) => {
-    incidentsCache = [...incidents];
+    incidentsCache = incidents.map((inc, i) => ({
+      ...inc,
+      sequenceNumber: inc.sequenceNumber !== undefined ? Number(inc.sequenceNumber) : i + 1,
+      matchedPastIncidentIds: inc.matchedPastIncidentIds || [],
+      confidence: inc.confidence || (inc.memoryAssisted ? 'high' : 'low'),
+      firstFixWorked: inc.firstFixWorked !== undefined ? inc.firstFixWorked : (inc.outcome === 'success'),
+    }));
     saveToDisk();
     return incidentsCache;
   },
 
-  resolve: (id, { fixApplied, outcome, rootCause, timeToResolveMinutes }) => {
+  resolve: (id, { fixApplied, outcome, rootCause, timeToResolveMinutes, firstFixWorked }) => {
     const idx = incidentsCache.findIndex((inc) => inc.id === id);
     if (idx < 0) {
       return null;
     }
+    const resolvedOutcome = outcome !== undefined ? outcome : incidentsCache[idx].outcome;
     incidentsCache[idx] = {
       ...incidentsCache[idx],
       status: 'resolved',
       fixApplied: fixApplied !== undefined ? fixApplied : incidentsCache[idx].fixApplied,
-      outcome: outcome !== undefined ? outcome : incidentsCache[idx].outcome,
+      outcome: resolvedOutcome,
       rootCause: rootCause !== undefined ? rootCause : incidentsCache[idx].rootCause,
       timeToResolveMinutes: timeToResolveMinutes !== undefined ? Number(timeToResolveMinutes) : incidentsCache[idx].timeToResolveMinutes,
+      firstFixWorked: firstFixWorked !== undefined ? Boolean(firstFixWorked) : (resolvedOutcome === 'success'),
     };
     saveToDisk();
     return incidentsCache[idx];

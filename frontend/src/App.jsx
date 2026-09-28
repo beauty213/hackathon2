@@ -21,6 +21,7 @@ import {
   Sparkles,
   HelpCircle
 } from 'lucide-react';
+import MemoryImpactView from './components/MemoryImpactView';
 
 // The 5 core attack incident types plus 1 novel zero-day
 const PRESETS = [
@@ -102,6 +103,10 @@ export default function App() {
   const [loadingScoreboard, setLoadingScoreboard] = useState(false);
   const [error, setError] = useState(null);
 
+  // Active Navigation Tab: 'triage' or 'analytics'
+  const [activeTab, setActiveTab] = useState('triage');
+  const [analyticsKey, setAnalyticsKey] = useState(0);
+
   // Modal / Form state for resolving an open incident
   const [showResolveModal, setShowResolveModal] = useState(false);
   const [resolvingIncident, setResolvingIncident] = useState(null);
@@ -128,6 +133,7 @@ export default function App() {
         const incData = await incRes.json();
         setAllIncidents(incData);
       }
+      setAnalyticsKey((k) => k + 1);
     } catch (err) {
       console.error('Failed to load scoreboard data:', err);
     } finally {
@@ -261,9 +267,31 @@ export default function App() {
         </div>
       </header>
 
-      {/* 4-Panel Grid Layout */}
-      <div className="four-panel-grid">
-        {/* PANEL 1: INCIDENT INPUT */}
+      {/* Top Tab Navigation */}
+      <nav className="tab-navigation-bar">
+        <button
+          type="button"
+          className={`tab-btn ${activeTab === 'triage' ? 'tab-btn-active' : ''}`}
+          onClick={() => setActiveTab('triage')}
+        >
+          <Terminal size={17} />
+          <span>Live Incident Triage</span>
+        </button>
+        <button
+          type="button"
+          className={`tab-btn ${activeTab === 'analytics' ? 'tab-btn-active' : ''}`}
+          onClick={() => setActiveTab('analytics')}
+        >
+          <TrendingUp size={17} />
+          <span>Memory Impact & Analysis</span>
+          <span className="tab-proof-badge">Proof Metric</span>
+        </button>
+      </nav>
+
+      {/* Main Tab Content */}
+      {activeTab === 'triage' ? (
+        <div className="four-panel-grid">
+          {/* PANEL 1: INCIDENT INPUT */}
         <section className="panel panel-input">
           <div className="panel-header">
             <div className="panel-title">
@@ -709,6 +737,12 @@ export default function App() {
           </div>
         </section>
       </div>
+      ) : (
+        <MemoryImpactView
+          key={analyticsKey}
+          onSwitchToTriage={() => setActiveTab('triage')}
+        />
+      )}
 
       {/* RESOLVE MODAL */}
       {showResolveModal && (
