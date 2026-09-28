@@ -248,7 +248,7 @@ async function queryMemory(incident) {
   const filtered = scored
     .filter(s => s.score >= 0.25)
     .sort((a, b) => b.score - a.score)
-    .slice(0, 3)
+    .slice(0, 10)
     .map(({ item, score }) => ({
       id: item.incidentId || item.id,
       text: item.content,
@@ -258,7 +258,7 @@ async function queryMemory(incident) {
       pastIncident: item.incident,
     }));
 
-  console.log(`[Hindsight] Local search found ${filtered.length} matching past incidents`);
+  console.log(`[Hindsight] Local search found ${filtered.length} matching past incidents (up to 10)`);
   return filtered;
 }
 
