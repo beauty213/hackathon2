@@ -6,6 +6,7 @@ import NewIncidentView from './views/NewIncidentView';
 import IncidentDetailView from './views/IncidentDetailView';
 import SystemHistoryView from './views/SystemHistoryView';
 import MemoryImpactPageView from './views/MemoryImpactPageView';
+import BeforeAfterView from './views/BeforeAfterView';
 
 export default function App() {
   return (
@@ -19,10 +20,12 @@ export default function App() {
           <Routes>
             <Route path="/" element={<DashboardView />} />
             <Route path="/new" element={<NewIncidentView />} />
+            <Route path="/compare" element={<BeforeAfterView />} />
             <Route path="/incidents/:id" element={<IncidentDetailView />} />
             <Route path="/history" element={<SystemHistoryView />} />
             <Route path="/impact" element={<MemoryImpactPageView />} />
             {/* Aliases & Fallbacks */}
+            <Route path="/before-after" element={<Navigate to="/compare" replace />} />
             <Route path="/analytics" element={<Navigate to="/impact" replace />} />
             <Route path="/dashboard" element={<Navigate to="/" replace />} />
             <Route path="*" element={<Navigate to="/" replace />} />

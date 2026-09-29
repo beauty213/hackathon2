@@ -448,3 +448,211 @@ export function generateStaticTriage(formInput) {
   }
 }
 
+export const COMPARE_PRESETS = [
+  {
+    key: 'unusual_outbound_traffic',
+    label: '1. Unusual Outbound Traffic (SSRF Exfiltration)',
+    alertType: 'unusual_outbound_traffic',
+    system: 'webhook-dispatcher-01',
+    severity: 'high',
+    matchedId: 'INC-2024-001',
+    log: 'HTTP 200 GET to 169.254.169.254/latest/meta-data/iam/security-credentials/ from client webhook proxy worker-04; outbound payload 480MB'
+  },
+  {
+    key: 'brute_force_login',
+    label: '2. Brute Force Login (Credential Stuffing Spike)',
+    alertType: 'brute_force_login',
+    system: 'auth-api-cluster',
+    severity: 'high',
+    matchedId: 'INC-2024-002',
+    log: '150 failed login attempts/sec on /api/v1/auth/login from subnet 198.51.100.0/24 targeting user admin'
+  },
+  {
+    key: 'privilege_escalation',
+    label: '3. Privilege Escalation (Container Escape)',
+    alertType: 'privilege_escalation',
+    system: 'ci-runner-fleet',
+    severity: 'critical',
+    matchedId: 'INC-2024-003',
+    log: 'sudo: gitlab-runner : TTY=unknown ; PWD=/builds ; USER=root ; COMMAND=/bin/nsenter -t 1 -m -u -n -i bash'
+  },
+  {
+    key: 'ransomware_activity',
+    label: '4. Ransomware Activity (Cryptolock Volume Encryption)',
+    alertType: 'ransomware_activity',
+    system: 'storage-nfs-prod',
+    severity: 'critical',
+    matchedId: 'INC-2024-004',
+    log: 'Mass file modification: 52,000 files renamed with extension .cryptolock in /exports/shares within 45s'
+  },
+  {
+    key: 'ddos_traffic_spike',
+    label: '5. DDoS Traffic Spike (SYN Reflection Flood)',
+    alertType: 'ddos_traffic_spike',
+    system: 'edge-ingress-gateway',
+    severity: 'critical',
+    matchedId: 'INC-2024-005',
+    log: 'SYN flood detected: 9.2 million pps / 48 Gbps targeting /api/v1/checkout from UDP/SYN reflection pool'
+  },
+  {
+    key: 'phishing_credential_harvest',
+    label: '6. Phishing & OAuth Hijack (Mailbox Forwarding Rule)',
+    alertType: 'phishing_credential_harvest',
+    system: 'mail-exchange-online',
+    severity: 'high',
+    matchedId: 'INC-2024-006',
+    log: 'Mailbox inbox rule created: forward all emails containing invoice, payment, secret to extern-drop@proton.me; OAuth app granted full Mail.ReadWrite'
+  }
+];
+
+export function getStaticCompare(presetKey) {
+  const preset = COMPARE_PRESETS.find((p) => p.key === presetKey) || COMPARE_PRESETS[0];
+
+  const compareMap = {
+    unusual_outbound_traffic: {
+      withoutMemory: {
+        recommendation: "Terminate outgoing connections on webhook-dispatcher-01, rotate AWS access keys, and review recent pod deployment history.",
+        likelyRootCause: "Unconfirmed anomalous egress. Possible compromised API token or unauthorized microservice call.",
+        confidence: "low",
+        matchedPastIncidentIds: [],
+        reasoning: "Triage executed with persistent memory disabled. The agent must diagnose from zero-day first principles, risking ineffective process kills that don't stop SSRF tunnels.",
+        estimatedTimeToResolve: 55,
+        pitfalls: "Terminating the process fails because the backdoor re-establishes via pod restart. Without memory, network egress blocking is missed."
+      },
+      withMemory: {
+        recommendation: "Enforce IMDSv2 metadata hop limits and deploy Calico network egress policy blocking 169.254.169.254/32 directly at the CNI layer.",
+        likelyRootCause: "Unsanitized webhook URLs allowing SSRF into cloud instance metadata service (identical pattern to INC-2024-001).",
+        confidence: "high",
+        matchedPastIncidentIds: ["INC-2024-001"],
+        reasoning: "Hindsight memory recalled INC-2024-001. Previous attempt of killing process failed (took 55m); memory guided the agent straight to Calico network perimeter rules.",
+        estimatedTimeToResolve: 18,
+        benefits: "Immediate precision containment. Bypasses known failed approaches and permanently blocks metadata access in 18 minutes."
+      }
+    },
+    brute_force_login: {
+      withoutMemory: {
+        recommendation: "Apply manual IP blacklists on iptables and prompt users on the target subnet to reset their passwords.",
+        likelyRootCause: "Isolated dictionary attack targeting admin accounts from suspicious IP addresses.",
+        confidence: "low",
+        matchedPastIncidentIds: [],
+        reasoning: "Triage performed without historical recall. The agent suggests individual IP blocking, which easily fails against distributed rotating proxy botnets.",
+        estimatedTimeToResolve: 48,
+        pitfalls: "Attacker rotates through residential proxies, quickly bypassing individual static IP blocks. Manual rules take 48m to diagnose."
+      },
+      withMemory: {
+        recommendation: "Deploy Cloudflare WAF IP reputation rate limiting and enforce adaptive MFA challenges on all /v1/auth/login endpoints.",
+        likelyRootCause: "Distributed credential stuffing attack leveraging rotating proxy pools (matched to INC-2024-002 failure mode).",
+        confidence: "high",
+        matchedPastIncidentIds: ["INC-2024-002", "INC-2024-008"],
+        reasoning: "Recalled INC-2024-002 where manual IP blocking had only partial success. Memory immediately applies global WAF rate limiting and MFA challenges.",
+        estimatedTimeToResolve: 14,
+        benefits: "Stops credential stuffing botnets globally in 14 minutes, eliminating manual IP chasing."
+      }
+    },
+    privilege_escalation: {
+      withoutMemory: {
+        recommendation: "Revoke service account credentials and restart the Kubernetes node daemon.",
+        likelyRootCause: "Suspicious privileged process activity detected inside runner pod.",
+        confidence: "low",
+        matchedPastIncidentIds: [],
+        reasoning: "Without institutional memory, the agent focuses on temporary credentials rather than root-level container capability misconfigurations.",
+        estimatedTimeToResolve: 60,
+        pitfalls: "Token revocation leaves the privileged container spec untouched, allowing the attacker to re-enter via nsenter."
+      },
+      withMemory: {
+        recommendation: "Remove privileged flag from Docker daemon spec, drop CAP_SYS_ADMIN, and apply Kyverno admission policy.",
+        likelyRootCause: "CI runner container escape via nsenter to host kernel (matched to INC-2024-003 signature).",
+        confidence: "high",
+        matchedPastIncidentIds: ["INC-2024-003", "INC-2024-009"],
+        reasoning: "Recalled INC-2024-003 failure where token reset failed. Directly remediates the host container escape vector.",
+        estimatedTimeToResolve: 16,
+        benefits: "Surgically eliminates container breakout vector in 16m instead of 60m manual root-cause tracing."
+      }
+    },
+    ransomware_activity: {
+      withoutMemory: {
+        recommendation: "Kill PowerShell/encryption processes and reboot storage host to inspect file system integrity.",
+        likelyRootCause: "Cryptographic ransomware script active on storage vault.",
+        confidence: "low",
+        matchedPastIncidentIds: [],
+        reasoning: "Unassisted first-principles triage suggests rebooting, which historically triggered automated encryption on boot before keys were secured.",
+        estimatedTimeToResolve: 52,
+        pitfalls: "Rebooting without network severing accelerates encryption via startup tasks, causing data loss."
+      },
+      withMemory: {
+        recommendation: "Sever NFS export network interface immediately, isolate infected host, and restore immutable ZFS snapshot.",
+        likelyRootCause: "Compromised workstation mounted network share executing ransomware payload (matched to INC-2024-004).",
+        confidence: "high",
+        matchedPastIncidentIds: ["INC-2024-004", "INC-2024-010"],
+        reasoning: "Recalled INC-2024-004 where rebooting worsened damage. Applies instant network severance and zero-data-loss ZFS rollback.",
+        estimatedTimeToResolve: 15,
+        benefits: "Prevents entire share corruption. Restores clean state in 15 minutes with zero ransom payment."
+      }
+    },
+    ddos_traffic_spike: {
+      withoutMemory: {
+        recommendation: "Increase server CPU instances, add memory to authoritative DNS daemons, and restart bind9 service.",
+        likelyRootCause: "High-volume DNS query traffic overwhelming server daemon capacity.",
+        confidence: "low",
+        matchedPastIncidentIds: [],
+        reasoning: "Agent attempts infrastructure scaling, which fails because the transit bandwidth link is saturated, not server CPU.",
+        estimatedTimeToResolve: 45,
+        pitfalls: "Compute scaling increases cloud bills without resolving upstream transit link saturation."
+      },
+      withMemory: {
+        recommendation: "Activate Cloudflare Under Attack mode and enable Anycast BGP scrubbing with Geo-blocking.",
+        likelyRootCause: "Anycast DNS amplification attack overwhelming upstream transit bandwidth (matched to INC-2024-005).",
+        confidence: "high",
+        matchedPastIncidentIds: ["INC-2024-005", "INC-2024-011"],
+        reasoning: "Recalled INC-2024-005 failure of compute scaling. Directly redirects volumetric reflection flood to Anycast BGP scrubbing.",
+        estimatedTimeToResolve: 12,
+        benefits: "Restores DNS resolution within 12 minutes without wasteful compute scaling."
+      }
+    },
+    phishing_credential_harvest: {
+      withoutMemory: {
+        recommendation: "Delete forwarding inbox rule and reset compromised user account password.",
+        likelyRootCause: "Unauthorized mailbox rule forwarding corporate emails to external address.",
+        confidence: "low",
+        matchedPastIncidentIds: [],
+        reasoning: "Without memory, agent assumes password reset is sufficient, ignoring OAuth enterprise application grants.",
+        estimatedTimeToResolve: 40,
+        pitfalls: "OAuth third-party consent grant remains authorized, allowing attacker to keep reading mail without password."
+      },
+      withMemory: {
+        recommendation: "Revoke all active Okta/M365 sessions, invalidate OAuth refresh tokens, and enforce FIDO2 hardware keys.",
+        likelyRootCause: "OAuth consent grant hijack and Evilginx session interception (matched to INC-2024-006).",
+        confidence: "high",
+        matchedPastIncidentIds: ["INC-2024-006", "INC-2024-012"],
+        reasoning: "Recalled INC-2024-006 where password reset alone failed. Directly revokes OAuth application grant and forces hardware key.",
+        estimatedTimeToResolve: 10,
+        benefits: "Full credential and token revocation completed in 10 minutes."
+      }
+    }
+  };
+
+  const selected = compareMap[preset.key] || compareMap.unusual_outbound_traffic;
+  const savedMinutes = Math.max(0, selected.withoutMemory.estimatedTimeToResolve - selected.withMemory.estimatedTimeToResolve);
+  const percentFaster = Math.round((savedMinutes / selected.withoutMemory.estimatedTimeToResolve) * 100);
+
+  return {
+    preset,
+    withoutMemory: selected.withoutMemory,
+    withMemory: selected.withMemory,
+    differences: {
+      confidenceChange: `${selected.withoutMemory.confidence.toUpperCase()} ➔ ${selected.withMemory.confidence.toUpperCase()}`,
+      matchedIncidents: selected.withMemory.matchedPastIncidentIds,
+      fixSuggested: {
+        without: selected.withoutMemory.recommendation,
+        with: selected.withMemory.recommendation,
+      },
+      estimatedTimeToResolve: {
+        without: selected.withoutMemory.estimatedTimeToResolve,
+        with: selected.withMemory.estimatedTimeToResolve,
+        savedMinutes,
+        percentFaster,
+      },
+    },
+  };
+}
+

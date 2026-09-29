@@ -71,9 +71,11 @@ SentinelMind's interface follows the core usability standard: **ONE PRIMARY TASK
 |---|---|---|---|
 | **Dashboard** | `/` | Operational Overview | 4 stat cards (Open, Resolved, Success Rate, MTTR), recent incidents queue (last 10), one-click deep-dive links. |
 | **New Incident** | `/new` | Live Ingestion & Triage | **Canonical 10-Scenario Card Bank**, payload editor, autonomous Groq triage with recalled memory trail banner, "Mark Resolved" modal. |
+| **Before vs After** | `/compare` | Side-by-Side Effects Tool | **Live Split Comparison Engine**: Directly pits unassisted triage against Hindsight-assisted recall. Shows MTTR drop, certainty jump, known failure avoidance, and operational effects matrix. |
 | **Incident Detail** | `/incidents/:id` | Forensic Investigation | Metadata card, chronological recalled memory timeline, **What-If Candidate Remediation Analysis** table with LLM plain-English summary. |
 | **System History** | `/history` | Enterprise Audit Trail | Dense sortable audit table, multi-parameter filters (Alert Type, Severity, Status, Memory-Assisted), instant client-side search. |
-| **Memory Impact** | `/impact` | Empirical Value Proof | 4 headline metrics (-74.8% MTTR), interactive learning curve chart (Recharts), **Live Before vs After Split Comparison**, per-type trends, and auto-generated insights. |
+| **Memory Impact** | `/impact` | Empirical Value Proof | 4 headline metrics (-74.8% MTTR), interactive learning curve chart (Recharts), per-type trends, and auto-generated insights. |
+
 
 ---
 

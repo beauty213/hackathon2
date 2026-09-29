@@ -8,7 +8,8 @@ import {
   TrendingUp,
   Brain,
   Zap,
-  ExternalLink
+  ExternalLink,
+  GitCompare
 } from 'lucide-react';
 
 export default function Sidebar() {
@@ -24,6 +25,12 @@ export default function Sidebar() {
       label: 'New Incident',
       icon: PlusCircle,
       badge: 'Triage',
+    },
+    {
+      to: '/compare',
+      label: 'Before vs After',
+      icon: GitCompare,
+      badge: 'Effects',
     },
     {
       to: '/history',
@@ -69,7 +76,7 @@ export default function Sidebar() {
               <Icon size={18} className="nav-icon" />
               <span className="nav-text">{item.label}</span>
               {item.badge && (
-                <span className={`nav-badge ${item.badge === 'Proof' ? 'nav-badge-proof' : ''}`}>
+                <span className={`nav-badge ${item.badge === 'Proof' ? 'nav-badge-proof' : item.badge === 'Effects' ? 'nav-badge-compare' : ''}`}>
                   {item.badge}
                 </span>
               )}
