@@ -289,5 +289,25 @@
     ],
     "confidence": "high",
     "firstFixWorked": true
+  },
+  {
+    "id": "INC-1790644256898",
+    "timestamp": "2026-09-29T01:10:56.898Z",
+    "alertType": "unusual_outbound_traffic",
+    "affectedSystem": "billing-export-01",
+    "severity": "critical",
+    "rawLogSnippet": "[NET-SEC] 2024-08-10T09:15:00Z High volume egress: 12.4GB transmitted to external IP 185.220.101.5 on port 443 over 10 minutes",
+    "status": "resolved",
+    "fixApplied": "Immediately isolate billing-export-01 from the network, block outbound traffic to 185.220.101.5, capture a forensic memory dump and disk image, enumerate running processes and scheduled tasks, review recent credential changes and privileged access logs, scan the host with up‑to‑date anti‑malware tools, and rotate any credentials used by the service. After containment, perform a full packet‑capture review of the 10‑minute window, identify the originating process or script, and apply remediation (e.g., remove malicious binaries, patch vulnerable software, enforce least‑privilege).",
+    "outcome": "success",
+    "timeToResolveMinutes": 15,
+    "rootCause": "Compromised host or credential leading to unauthorized data exfiltration via HTTPS to an external IP (possible malware or malicious script)",
+    "memoryAssisted": true,
+    "matchedPastIncidentIds": [
+      "INC-2024-001"
+    ],
+    "confidence": "medium",
+    "firstFixWorked": true,
+    "sequenceNumber": 16
   }
 ]
