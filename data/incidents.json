@@ -310,5 +310,50 @@
     "confidence": "high",
     "firstFixWorked": null,
     "sequenceNumber": 16
+  },
+  {
+    "id": "INC-1790645480002",
+    "timestamp": "2026-09-29T01:31:20.002Z",
+    "alertType": "unusual_outbound_traffic",
+    "affectedSystem": "billing-export-01",
+    "severity": "critical",
+    "rawLogSnippet": "[NET-SEC] 2024-08-10T09:15:00Z High volume egress: 12.4GB transmitted to external IP 185.220.101.5 on port 443 over 10 minutes",
+    "status": "resolved",
+    "fixApplied": "[Hindsight Memory Recalled] Apply proven resolution from INC-2024-001: Apply standard past remediation playbook. Quarantined affected nodes and verified system health on billing-export-01.",
+    "outcome": "success",
+    "timeToResolveMinutes": 15,
+    "rootCause": "High probability duplicate of INC-2024-001: Recurring configuration regression",
+    "memoryAssisted": true,
+    "matchedPastIncidentIds": [
+      "INC-2024-001",
+      "INC-2024-007",
+      "INC-2024-013"
+    ],
+    "confidence": "high",
+    "firstFixWorked": true,
+    "sequenceNumber": 17
+  },
+  {
+    "id": "INC-1790645633750",
+    "timestamp": "2026-09-29T01:33:53.750Z",
+    "alertType": "unusual_outbound_traffic",
+    "affectedSystem": "billing-export-01",
+    "severity": "critical",
+    "rawLogSnippet": "[NET-SEC] 2024-08-10T09:15:00Z High volume egress: 12.4GB transmitted to external IP 185.220.101.5 on port 443 over 10 minutes",
+    "status": "resolved",
+    "fixApplied": "[Hindsight Memory Recalled] Apply proven resolution from INC-2024-001: Apply standard past remediation playbook. Quarantined affected nodes and verified system health on billing-export-01.",
+    "outcome": "success",
+    "timeToResolveMinutes": 15,
+    "rootCause": "High probability duplicate of INC-2024-001: Recurring configuration regression",
+    "memoryAssisted": true,
+    "matchedPastIncidentIds": [
+      "INC-2024-001",
+      "INC-1790645480002",
+      "INC-2024-007",
+      "INC-2024-013"
+    ],
+    "confidence": "high",
+    "firstFixWorked": true,
+    "sequenceNumber": 18
   }
 ]
