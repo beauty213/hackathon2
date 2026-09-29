@@ -96,11 +96,21 @@ export default function NewIncidentView() {
 
       const data = await res.json();
       setCurrentResult(data);
+      if (data?.incident?.id) {
+        try {
+          sessionStorage.setItem(`incident_${data.incident.id}`, JSON.stringify(data));
+        } catch (_) {}
+      }
     } catch (err) {
       console.warn('API triage unavailable, using offline Hindsight triage fallback:', err.message);
       // Autonomous fallback ensures demo/testing is 100% resilient
       const fallbackResult = generateStaticTriage(formInput);
       setCurrentResult(fallbackResult);
+      if (fallbackResult?.incident?.id) {
+        try {
+          sessionStorage.setItem(`incident_${fallbackResult.incident.id}`, JSON.stringify(fallbackResult));
+        } catch (_) {}
+      }
     } finally {
       setAnalyzing(false);
     }
@@ -348,7 +358,11 @@ export default function NewIncidentView() {
                     <button
                       type="button"
                       className="btn-deep-dive"
-                      onClick={() => navigate(`/incidents/${currentResult.incident.id}`)}
+                      onClick={() =>
+                        navigate(`/incidents/${currentResult.incident.id}`, {
+                          state: { triageResult: currentResult },
+                        })
+                      }
                     >
                       <span>View full memory trail & What-If for this match</span>
                       <ArrowRight size={15} />

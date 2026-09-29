@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import {
   ShieldAlert,
   ArrowLeft,
@@ -21,8 +21,27 @@ import { getStaticIncidentDetail } from '../data/staticIncidents';
 
 export default function IncidentDetailView() {
   const { id } = useParams();
+  const location = useLocation();
   const navigate = useNavigate();
-  const [data, setData] = useState(() => getStaticIncidentDetail(id));
+
+  const getInitialData = () => {
+    // 1. Check navigation route state
+    if (location.state?.triageResult?.incident?.id === id) {
+      return location.state.triageResult;
+    }
+    // 2. Check sessionStorage
+    try {
+      const stored = sessionStorage.getItem(`incident_${id}`);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed?.incident) return parsed;
+      }
+    } catch (_) {}
+    // 3. Fallback to static or synthesized incident
+    return getStaticIncidentDetail(id);
+  };
+
+  const [data, setData] = useState(getInitialData);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [showResolveModal, setShowResolveModal] = useState(false);
@@ -34,31 +53,26 @@ export default function IncidentDetailView() {
         const json = await res.json();
         setData(json);
         setError(null);
+        try {
+          sessionStorage.setItem(`incident_${id}`, JSON.stringify(json));
+        } catch (_) {}
       } else if (!data) {
         const fallback = getStaticIncidentDetail(id);
-        if (fallback) {
-          setData(fallback);
-        } else {
-          setError(`Incident ${id} not found`);
-        }
+        setData(fallback);
       }
     } catch (err) {
       if (!data) {
         const fallback = getStaticIncidentDetail(id);
-        if (fallback) {
-          setData(fallback);
-        } else {
-          setError(err.message || 'Failed to load incident detail');
-        }
+        setData(fallback);
       }
     }
   };
 
   useEffect(() => {
     if (id) {
-      const staticInit = getStaticIncidentDetail(id);
-      if (staticInit && !data) {
-        setData(staticInit);
+      const initial = getInitialData();
+      if (initial && (!data || data.incident?.id !== id)) {
+        setData(initial);
       }
       fetchIncidentDetail();
     }

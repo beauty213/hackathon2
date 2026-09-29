@@ -25,8 +25,29 @@ function loadFromDisk() {
       incidentsCache = JSON.parse(content);
       console.log(`[IncidentStore] Loaded ${incidentsCache.length} incidents from ${DATA_FILE}`);
     } else {
-      incidentsCache = [];
-      saveToDisk();
+      // Find seed file if DATA_FILE doesn't exist (e.g. in /tmp/data on Vercel)
+      const possibleSeedPaths = [
+        path.resolve(__dirname, '../../data/incidents.json'),
+        path.resolve(__dirname, '../data/incidents.json'),
+        path.resolve(process.cwd(), 'data/incidents.json'),
+      ];
+      let seeded = false;
+      for (const p of possibleSeedPaths) {
+        if (fs.existsSync(p)) {
+          try {
+            const content = fs.readFileSync(p, 'utf-8');
+            incidentsCache = JSON.parse(content);
+            console.log(`[IncidentStore] Seeded ${incidentsCache.length} incidents from ${p} to ${DATA_FILE}`);
+            saveToDisk();
+            seeded = true;
+            break;
+          } catch (_) {}
+        }
+      }
+      if (!seeded) {
+        incidentsCache = [];
+        saveToDisk();
+      }
     }
   } catch (err) {
     console.error(`[IncidentStore] Error loading incidents from disk:`, err.message);
