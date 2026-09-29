@@ -293,6 +293,7 @@ router.post('/:id/resolve', async (req, res) => {
  */
 router.get('/:id', async (req, res) => {
   try {
+    const { id } = req.params;
     let incident = incidentStore.getById(id);
     if (!incident) {
       console.log(`[IncidentsRoute] Incident ${id} not in store, synthesizing dynamic recovery record...`);
@@ -387,17 +388,14 @@ router.get('/:id', async (req, res) => {
 router.get('/:id/whatif', (req, res) => {
   try {
     const { id } = req.params;
-    const incident = incidentStore.getById(id);
-    if (!incident) {
-      return res.status(404).json({ error: `Incident ${id} not found` });
-    }
-
+    let incident = incidentStore.getById(id);
     const allIncidents = incidentStore.getAll();
-    const candidates = computeWhatIfCandidates(incident.alertType, allIncidents);
+    const alertType = incident?.alertType || 'unusual_outbound_traffic';
+    const candidates = computeWhatIfCandidates(alertType, allIncidents);
 
     return res.json({
-      incidentId: incident.id,
-      alertType: incident.alertType,
+      incidentId: id,
+      alertType,
       candidates,
     });
   } catch (err) {

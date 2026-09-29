@@ -289,5 +289,26 @@
     ],
     "confidence": "high",
     "firstFixWorked": true
+  },
+  {
+    "id": "INC-1790644826258",
+    "timestamp": "2026-09-29T01:29:01.621Z",
+    "alertType": "unusual_outbound_traffic",
+    "affectedSystem": "webhook-dispatcher-01",
+    "severity": "high",
+    "rawLogSnippet": "Dynamic forensic investigation session for alert INC-1790644826258",
+    "status": "open",
+    "fixApplied": null,
+    "outcome": null,
+    "timeToResolveMinutes": null,
+    "rootCause": null,
+    "memoryAssisted": true,
+    "matchedPastIncidentIds": [
+      "INC-2024-001",
+      "INC-2024-007"
+    ],
+    "confidence": "high",
+    "firstFixWorked": null,
+    "sequenceNumber": 16
   }
 ]

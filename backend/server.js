@@ -40,7 +40,7 @@ app.use('/', analyticsRouter);
 
 // Start server and seed baseline memories into Hindsight
 if (!process.env.VERCEL && require.main === module) {
-  const server = app.listen(PORT, async () => {
+  const server = app.listen(PORT, '0.0.0.0', async () => {
     console.log(`====================================================`);
     console.log(`🛡️  SentinelMind Backend running on port ${PORT}`);
     console.log(`🔗 Health check: http://localhost:${PORT}/health`);
