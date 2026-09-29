@@ -17,35 +17,49 @@ import {
 import PageHeader from '../components/PageHeader';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import ResolveModal from '../components/ResolveModal';
+import { getStaticIncidentDetail } from '../data/staticIncidents';
 
 export default function IncidentDetailView() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState(() => getStaticIncidentDetail(id));
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [showResolveModal, setShowResolveModal] = useState(false);
 
   const fetchIncidentDetail = async () => {
-    setLoading(true);
-    setError(null);
     try {
       const res = await fetch(`/api/incidents/${id}`);
-      if (!res.ok) {
-        throw new Error(`Incident ${id} not found`);
+      if (res.ok) {
+        const json = await res.json();
+        setData(json);
+        setError(null);
+      } else if (!data) {
+        const fallback = getStaticIncidentDetail(id);
+        if (fallback) {
+          setData(fallback);
+        } else {
+          setError(`Incident ${id} not found`);
+        }
       }
-      const json = await res.json();
-      setData(json);
     } catch (err) {
-      console.error('Failed to load incident:', err);
-      setError(err.message || 'Failed to load incident detail');
-    } finally {
-      setLoading(false);
+      if (!data) {
+        const fallback = getStaticIncidentDetail(id);
+        if (fallback) {
+          setData(fallback);
+        } else {
+          setError(err.message || 'Failed to load incident detail');
+        }
+      }
     }
   };
 
   useEffect(() => {
     if (id) {
+      const staticInit = getStaticIncidentDetail(id);
+      if (staticInit && !data) {
+        setData(staticInit);
+      }
       fetchIncidentDetail();
     }
   }, [id]);

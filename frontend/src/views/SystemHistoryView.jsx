@@ -14,11 +14,12 @@ import {
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import LoadingSkeleton from '../components/LoadingSkeleton';
+import { ALL_STATIC_INCIDENTS } from '../data/staticIncidents';
 
 export default function SystemHistoryView() {
   const navigate = useNavigate();
-  const [incidents, setIncidents] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [incidents, setIncidents] = useState(ALL_STATIC_INCIDENTS);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
   // Filter States
@@ -33,18 +34,16 @@ export default function SystemHistoryView() {
   const [sortAsc, setSortAsc] = useState(false); // default descending (newest first)
 
   const fetchIncidents = async () => {
-    setLoading(true);
-    setError(null);
     try {
       const res = await fetch('/api/incidents');
-      if (!res.ok) throw new Error('Failed to load incident history');
-      const data = await res.json();
-      setIncidents(data);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          setIncidents(data);
+        }
+      }
     } catch (err) {
-      console.error('Error fetching history:', err);
-      setError(err.message || 'Failed to load system history');
-    } finally {
-      setLoading(false);
+      console.warn('SystemHistory live fetch error (retaining static baseline):', err.message);
     }
   };
 

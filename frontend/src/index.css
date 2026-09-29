@@ -1826,3 +1826,174 @@ code, pre, .mono, .mono-code {
   border-radius: 8px;
   font-size: 13px;
 }
+
+/* ==========================================================================
+   Canonical 10 Example Scenarios Card Bank
+   ========================================================================== */
+.canonical-examples-section {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 18px 20px;
+  margin-bottom: 24px;
+}
+
+.examples-header-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.examples-header-title h3 {
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.01em;
+}
+
+.examples-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+  margin-top: 14px;
+}
+
+@media (max-width: 1400px) {
+  .examples-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .examples-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .examples-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.example-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 110px;
+}
+
+.example-card:hover {
+  border-color: rgba(59, 130, 246, 0.5);
+  background: var(--bg-card-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.example-card-active {
+  border-color: var(--accent-cyan) !important;
+  background: rgba(6, 182, 212, 0.08) !important;
+  box-shadow: 0 0 16px rgba(6, 182, 212, 0.25) !important;
+}
+
+.example-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.example-seq {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--text-dim);
+}
+
+.example-id {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent-cyan);
+}
+
+.sev-badge-mini {
+  font-size: 9.5px;
+  font-weight: 800;
+  padding: 1px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.sev-badge-mini.sev-critical {
+  background: rgba(239, 68, 68, 0.18);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+.sev-badge-mini.sev-high {
+  background: rgba(245, 158, 11, 0.18);
+  color: #fcd34d;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+.sev-badge-mini.sev-medium {
+  background: rgba(59, 130, 246, 0.18);
+  color: #93c5fd;
+  border: 1px solid rgba(59, 130, 246, 0.4);
+}
+
+.example-type {
+  font-size: 12px;
+  font-weight: 700;
+  color: #f1f5f9;
+  line-height: 1.3;
+  margin-bottom: 4px;
+}
+
+.example-system {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-family: monospace;
+}
+
+.example-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.badge-assisted-mini {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.12);
+  padding: 2px 7px;
+  border-radius: 4px;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+
+.badge-unassisted-mini {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: rgba(148, 163, 184, 0.1);
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+

@@ -12,17 +12,16 @@ import {
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import LoadingSkeleton from '../components/LoadingSkeleton';
+import { STATIC_10_INCIDENTS, STATIC_STATS } from '../data/staticIncidents';
 
 export default function DashboardView() {
   const navigate = useNavigate();
-  const [stats, setStats] = useState(null);
-  const [recentIncidents, setRecentIncidents] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState(STATIC_STATS);
+  const [recentIncidents, setRecentIncidents] = useState([...STATIC_10_INCIDENTS].reverse());
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
   const fetchDashboard = async () => {
-    setLoading(true);
-    setError(null);
     try {
       const [scoreRes, incRes] = await Promise.all([
         fetch('/api/scoreboard'),
@@ -35,19 +34,18 @@ export default function DashboardView() {
       }
       if (incRes.ok) {
         const incData = await incRes.json();
-        // Sort descending by sequenceNumber or timestamp, take last 10
-        const sorted = [...incData].sort((a, b) => {
-          const seqA = Number(a.sequenceNumber) || 0;
-          const seqB = Number(b.sequenceNumber) || 0;
-          return seqB - seqA;
-        });
-        setRecentIncidents(sorted.slice(0, 10));
+        if (Array.isArray(incData) && incData.length > 0) {
+          // Sort descending by sequenceNumber or timestamp, take last 10
+          const sorted = [...incData].sort((a, b) => {
+            const seqA = Number(a.sequenceNumber) || 0;
+            const seqB = Number(b.sequenceNumber) || 0;
+            return seqB - seqA;
+          });
+          setRecentIncidents(sorted.slice(0, 10));
+        }
       }
     } catch (err) {
-      console.error('Error fetching dashboard:', err);
-      setError('Unable to load dashboard data. Please check backend connection.');
-    } finally {
-      setLoading(false);
+      console.warn('Dashboard live fetch error (retaining static baseline):', err.message);
     }
   };
 
