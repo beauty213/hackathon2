@@ -288,6 +288,82 @@ router.post('/:id/resolve', async (req, res) => {
 });
 
 /**
+ * GET /api/incidents/:id
+ * Returns a single incident with its recalled memory trail and whatif analysis
+ */
+router.get('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const incident = incidentStore.getById(id);
+    if (!incident) {
+      return res.status(404).json({ error: `Incident ${id} not found` });
+    }
+
+    const allIncidents = incidentStore.getAll();
+    const candidates = computeWhatIfCandidates(incident.alertType, allIncidents);
+
+    // Build memory trail from matchedPastIncidentIds or query Hindsight
+    let memoryTrail = [];
+    const seenIds = new Set([incident.id]);
+
+    if (Array.isArray(incident.matchedPastIncidentIds) && incident.matchedPastIncidentIds.length > 0) {
+      for (const pastId of incident.matchedPastIncidentIds) {
+        if (seenIds.has(pastId)) continue;
+        const past = incidentStore.getById(pastId);
+        if (past) {
+          seenIds.add(past.id);
+          memoryTrail.push({
+            id: past.id,
+            alertType: past.alertType,
+            date: past.timestamp || new Date().toISOString(),
+            similarityReason: `Recalled pattern matching ${past.alertType} on ${past.affectedSystem}`,
+            fixApplied: past.fixApplied || 'Apply standard playbook',
+            outcome: past.outcome || 'success',
+            timeToResolveMinutes: past.timeToResolveMinutes,
+            rootCause: past.rootCause || 'N/A',
+          });
+        }
+      }
+    }
+
+    // If memoryTrail is empty and incident has matching alert types in store, find past resolved matches
+    if (memoryTrail.length === 0 && incident.alertType) {
+      const pastSimilar = allIncidents.filter(
+        (i) => i.id !== incident.id && i.alertType === incident.alertType && i.status === 'resolved'
+      );
+      for (const past of pastSimilar.slice(0, 5)) {
+        if (seenIds.has(past.id)) continue;
+        seenIds.add(past.id);
+        memoryTrail.push({
+          id: past.id,
+          alertType: past.alertType,
+          date: past.timestamp || new Date().toISOString(),
+          similarityReason: `Historical similarity match for ${past.alertType} on ${past.affectedSystem}`,
+          fixApplied: past.fixApplied || 'Playbook applied',
+          outcome: past.outcome || 'success',
+          timeToResolveMinutes: past.timeToResolveMinutes,
+          rootCause: past.rootCause || 'N/A',
+        });
+      }
+    }
+
+    return res.json({
+      incident,
+      memoryTrail,
+      whatIf: {
+        candidates,
+        summary: candidates.length > 0
+          ? `Top candidate fix achieved ${candidates[0].successRate}% success rate across past recorded incidents.`
+          : 'No historical candidate fixes recorded.',
+      },
+    });
+  } catch (err) {
+    console.error('[IncidentsRoute] Error fetching single incident:', err);
+    return res.status(500).json({ error: 'Failed to fetch incident', message: err.message });
+  }
+});
+
+/**
  * GET /api/incidents/:id/whatif
  * Returns candidate fixes for the incident's alertType with stats
  */
